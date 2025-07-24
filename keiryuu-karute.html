@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>渓流保全工点検カルテ (バックアップ・復元機能付き)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; }
+        fieldset { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+        legend { font-weight: bold; padding: 0 0.5rem; margin-left: 0.5rem; }
+        .input-row { border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; background-color: #f8fafc; }
+        @media (max-width: 768px) {
+            .form-input, .form-select, .form-textarea, .form-number { font-size: 0.95rem; }
+            label { font-size: 0.8rem; }
+            .item-grid > * { grid-column: span 12 / span 12 !important; }
+            .grid-cols-3 > * { grid-column: span 3 / span 3; }
+            .input-row .item-grid { grid-template-columns: 1fr; }
+            .dimension-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .spec-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        .dimension-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; }
+        .dimension-grid label { text-align: center; font-size: 0.75rem; color: #4a5568; margin-bottom: 0.25rem; }
+        .spec-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+        .spec-grid label { display: block; text-align: center; font-size: 0.75rem; color: #4a5568; white-space: nowrap; margin-bottom: 0.25rem; }
+        #outputContainer { margin-top: 2rem; padding: 1rem; border: 1px solid #ccc; border-radius: 8px; background-color: #f9f9f9; }
+        #outputData { width: 100%; min-height: 150px; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; border: 1px solid #d1d5db; border-radius: 4px; padding: 0.5rem; }
+        .hidden { display: none !important; }
+        .additional-spec-field { position: relative; }
+        .delete-confirmation-prompt span, .delete-confirmation-prompt button { vertical-align: middle; }
+        .gps-item-status { font-size: 0.75rem; margin-left: 0.5rem; color: #64748b; }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto bg-white p-6 md:p-10 rounded-lg shadow-md">
+        <h1 class="text-2xl md:text-3xl font-bold mb-6 text-center text-blue-700">渓流保全工点検カルテ (様式2)</h1>
+
+        <form id="inspectionKarteForm">
+
+            <fieldset>
+                <legend class="text-lg text-gray-700">基本情報</legend>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                    <div> <label for="facilityName" class="block text-sm font-medium text-gray-700">施設名称</label> <input type="text" id="facilityName" name="facilityName" placeholder="例: ○○堰堤" class="form-input mt-1 block w-full border-gray-300 rounded-md shadow-sm"> </div>
+                    <div> <label for="inspectionDate" class="block text-sm font-medium text-gray-700">点検年月日</label> <input type="date" id="inspectionDate" name="inspectionDate" class="form-input mt-1 block w-full border-gray-300 rounded-md shadow-sm"> </div>
+                    <div> <label for="inspectorName" class="block text-sm font-medium text-gray-700">点検者氏名</label> <input type="text" id="inspectorName" name="inspectorName" placeholder="氏名を入力" class="form-input mt-1 block w-full border-gray-300 rounded-md shadow-sm"> </div>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend class="text-lg text-gray-700">個別点検記録</legend>
+                <div id="inspectionItemsContainer" class="mt-4 space-y-4">
+                    <div id="itemTemplate" class="input-row hidden">
+                         <div class="flex justify-between items-center mb-3">
+                            <span class="font-semibold text-gray-700">番号 <span class="item-number">1</span></span>
+                             <div class="delete-container">
+                                <button type="button" onclick="requestDeleteItemConfirmation(this)" class="delete-button text-red-600 hover:text-red-800 text-sm font-medium">削除</button>
+                                <div class="delete-confirmation-prompt hidden ml-2 inline-flex items-center space-x-2">
+                                    <span class="text-sm text-gray-700">本当に削除？</span>
+                                    <button type="button" onclick="executeRemoveItem(this)" class="text-white bg-red-600 hover:bg-red-700 px-2 py-1 text-xs rounded">はい</button>
+                                    <button type="button" onclick="cancelRemoveItemConfirmation(this)" class="text-gray-700 bg-gray-200 hover:bg-gray-300 px-2 py-1 text-xs rounded">いいえ</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="item-grid grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-4">
+                            <div class="md:col-span-12"><label class="block text-sm font-medium text-gray-700">施設区分/部位</label><select name="item_type[]" class="form-select mt-1 block w-full"><option value="">選択...</option><option value="堰堤工">堰堤工</option><option value="床固工">床固工</option><option value="谷止工">谷止工</option><option value="落差工">落差工</option><option value="頭首工">頭首工</option><option value="帯工">帯工</option><option value="護岸工_右岸">護岸工_右岸</option><option value="護岸工_左岸">護岸工_左岸</option><option value="護岸工_2面張">護岸工_2面張</option><option value="護岸工_3面張">護岸工_3面張</option><option value="護床工">護床工</option><option value="水路工">水路工</option><option value="流木止工">流木止工</option><option value="山腹工">山腹工</option><option value="山留工">山留工</option><option value="橋梁工">橋梁工</option><option value="沈砂池工">沈砂池工</option><option value="函渠工">函渠工</option><option value="魚道工">魚道工</option><option value="安全設備工">安全設備工</option><option value="その他">その他</option></select></div>
+                            <div class="md:col-span-12"><label class="block text-sm font-medium text-gray-700 mb-1">追加諸元</label><div class="spec-grid"><div class="additional-spec-field"><label>諸元1</label><input type="text" name="item_spec1_text" class="spec-text-input form-input block w-full"><select name="item_spec1_select" class="spec-select-input form-select hidden block w-full"></select></div><div class="additional-spec-field"><label>諸元2</label><input type="text" name="item_spec2_text" class="spec-text-input form-input block w-full"><select name="item_spec2_select" class="spec-select-input form-select hidden block w-full"></select></div><div class="additional-spec-field"><label>諸元3</label><input type="text" name="item_spec3_text" class="spec-text-input form-input block w-full"><select name="item_spec3_select" class="spec-select-input form-select hidden block w-full"></select></div></div></div>
+                            <div class="md:col-span-8"><label class="block text-sm font-medium text-gray-700 mb-1">寸法 (m)</label><div class="dimension-grid"><div><label>L</label><input type="number" step="0.1" name="item_dim_l[]" placeholder="延長/長さ" class="form-number mt-1 block w-full text-center"></div><div><label>H1</label><input type="number" step="0.1" name="item_dim_h1[]" placeholder="高さ/深さ" class="form-number mt-1 block w-full text-center"></div><div><label>H2</label><input type="number" step="0.1" name="item_dim_h2[]" placeholder="高さ2" class="form-number mt-1 block w-full text-center"></div><div><label>W</label><input type="number" step="0.1" name="item_dim_w[]" placeholder="幅" class="form-number mt-1 block w-full text-center"></div></div></div>
+                            <div class="md:col-span-4"><label class="block text-sm font-medium text-gray-700">写真番号</label><input type="number" step="1" name="item_photo_no[]" placeholder="No." class="form-number mt-1 block w-full text-center"></div>
+                            <div class="md:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-4 items-center border-t pt-4 mt-2">
+                                <div class="md:col-span-2 flex items-center space-x-2"><input type="text" name="item_lat[]" placeholder="緯度" readonly class="form-input block w-full bg-gray-100"><input type="text" name="item_lon[]" placeholder="経度" readonly class="form-input block w-full bg-gray-100"></div>
+                                <div class="md:col-span-1 text-center md:text-left"><button type="button" onclick="getGpsForItem(this)" class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50"><svg class="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 1 1 9.9 9.9L10 18.9l-4.95-4.95a7 7 0 0 1 0-9.9zM10 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" clip-rule="evenodd" /></svg>現在地を取得</button><span class="gps-item-status"></span></div>
+                            </div>
+                            <div class="md:col-span-12"><label class="block text-sm font-medium text-gray-700">詳細/特記事項</label><textarea name="item_details[]" rows="2" placeholder="変状の詳細、計測位置、特記事項などを記入" class="form-textarea mt-1 block w-full"></textarea></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-6 text-center block">
+                    <button type="button" onclick="addItem()" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"><svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>点検項目を追加</button>
+                </div>
+            </fieldset>
+
+            <fieldset><legend class="text-lg text-gray-700">総合所見</legend><div class="mt-4"><label for="overall_remarks" class="block text-sm font-medium text-gray-700">総合的な所見・評価・措置方針案など</label><textarea id="overall_remarks" name="overall_remarks" rows="4" placeholder="全体を通した所見などを自由に記入" class="form-textarea mt-1 block w-full"></textarea></div></fieldset>
+
+            <div id="outputContainer" class="hidden"><h3 class="text-lg font-semibold mb-3 text-gray-800">生成データ</h3><p class="text-sm text-gray-600 mb-3">下のテキストエリアの内容をコピーするか、TXTファイルでダウンロードしてください。</p><textarea id="outputData" readonly class="mb-3"></textarea><div class="text-right space-x-2"><button type="button" id="copyButton" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">コピー</button><button type="button" id="downloadButton" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">ダウンロード</button></div></div>
+            
+            <div class="mt-8 flex justify-center items-center space-x-2 md:space-x-4 flex-wrap gap-y-2">
+                <button type="button" onclick="restoreFromBackup()" class="inline-flex justify-center py-2 px-4 border border-green-600 shadow-sm text-base font-medium rounded-md text-green-700 bg-white hover:bg-green-50">バックアップから復元</button>
+                <button type="button" onclick="resetForm()" class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-100">リセット</button>
+                <button type="submit" class="inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">データ生成</button>
+                <input type="file" id="restoreFile" class="hidden" accept=".txt,.tsv" onchange="handleFileSelect(event)">
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const DRAFT_KEY = 'inspectionKarteDraft_v4';
+        const container = document.getElementById('inspectionItemsContainer');
+        const template = document.getElementById('itemTemplate');
+        const outputContainer = document.getElementById('outputContainer');
+        const outputDataTextarea = document.getElementById('outputData');
+        const copyButton = document.getElementById('copyButton');
+        const downloadButton = document.getElementById('downloadButton');
+        const inspectionForm = document.getElementById('inspectionKarteForm');
+        let generatedTsvData = '';
+        let lastAutoBackupCount = 0;
+
+        const options = {enteiStructure:['不透過型','透過型','部分透過型'],enteiMaterial:['コンクリート','空石積','練石積','粗石コンクリート','鋼製枠型','鋼製スリット','コンクリートスリット','護床ブロック'],enteiJurisdiction:['治山','その他'],goganMaterial:['コンクリート張','空石積','練石積','練石張','空ブロック積','練ブロック積','練ブロック張','巨石積','布団篭','蛇篭','擬木・擬石','その他'],goshoMaterial:['コンクリート張','石張','護床ブロック','布団篭','蛇篭','擬木・擬石','木工沈床'],suiroStructure:['L型側溝','U型側溝','プレハブ水路'],negiPresence:['有','無'],ryubokuMaterial:['鋼製','コンクリート'],sanpukuStructure:['法枠工','吹付工','コンクリート張工','ブロック積工','石積工','緑化工','水路工','矢板工','金網張工','アンカー工','かご工','木柵工'],kyoryoStructure:['コンクリート橋','鋼橋','石橋','木橋'],kankyoStructure:['管渠','暗渠','ヒューム管','ボックスカルバート'],gyodoStructure:['斜路式','階段式'],gyodoLayout:['一部','全部'],anzenStructure:['階段工','転落防止柵工','侵入防止柵','防護フェンス']};
+        const additionalSpecConfigMap = {'堰堤工':[{label:'構造',options:options.enteiStructure},{label:'材料',options:options.enteiMaterial},{label:'所管',options:options.enteiJurisdiction}],'床固工':[{label:'構造',options:options.enteiStructure},{label:'材料',options:options.enteiMaterial},{label:'所管',options:options.enteiJurisdiction}],'谷止工':[{label:'構造',options:options.enteiStructure},{label:'材料',options:options.enteiMaterial},{label:'所管',options:options.enteiJurisdiction}],'落差工':[{label:'構造',options:options.enteiStructure},{label:'材料',options:options.enteiMaterial},{label:'所管',options:options.enteiJurisdiction}],'頭首工':[{label:'構造',options:options.enteiStructure},{label:'材料',options:options.enteiMaterial},{label:'所管',options:options.enteiJurisdiction}],'帯工':[{label:'材料',options:options.enteiMaterial}],'護岸工_右岸':[{label:'材料',options:options.goganMaterial},{label:'根継',options:options.negiPresence}],'護岸工_左岸':[{label:'材料',options:options.goganMaterial},{label:'根継',options:options.negiPresence}],'護岸工_2面張':[{label:'右岸',options:options.goganMaterial},{label:'左岸',options:options.goganMaterial},{label:'根継',options:options.negiPresence}],'護岸工_3面張':[{label:'右岸',options:options.goganMaterial},{label:'左岸',options:options.goganMaterial},{label:'河床',options:options.goshoMaterial}],'護床工':[{label:'材料',options:options.goshoMaterial}],'水路工':[{label:'構造',options:options.suiroStructure}],'流木止工':[{label:'材料',options:options.ryubokuMaterial}],'山腹工':[{label:'構造',options:options.sanpukuStructure},{label:'構造',options:options.sanpukuStructure},{label:'構造',options:options.sanpukuStructure}],'山留工':[{label:'材料',options:options.goganMaterial}],'橋梁工':[{label:'構造',options:options.kyoryoStructure}],'沈砂池工':[{label:'右岸',options:options.goganMaterial},{label:'左岸',options:options.goganMaterial},{label:'河床',options:options.goshoMaterial}],'函渠工':[{label:'構造',options:options.kankyoStructure}],'魚道工':[{label:'構造',options:options.gyodoStructure},{label:'配置',options:options.gyodoLayout}],'安全設備工':[{label:'構造',options:options.anzenStructure}],'その他':[{label:'種別',placeholder:'種別を記入'},{label:'材質',placeholder:'材質を記入'},{label:'諸元',placeholder:'その他諸元'}]};
+
+        function updateDynamicFields(selectElement) {
+            const selectedValue = selectElement.value;
+            const itemRow = selectElement.closest('.input-row');
+            const specFields = itemRow.querySelectorAll('.additional-spec-field');
+            const config = additionalSpecConfigMap[selectedValue];
+            if (!config) {
+                specFields.forEach((field, index) => {
+                    field.classList.remove('hidden');
+                    const label = field.querySelector('label');
+                    const textInput = field.querySelector('.spec-text-input');
+                    const selectInput = field.querySelector('.spec-select-input');
+                    label.textContent = `諸元${index + 1}`;
+                    selectInput.classList.add('hidden');
+                    textInput.classList.remove('hidden');
+                    textInput.placeholder = `諸元${index + 1}`;
+                });
+                return;
+            }
+            specFields.forEach((field, index) => {
+                const specConfig = config[index];
+                field.classList.toggle('hidden', !specConfig);
+                if (specConfig) {
+                    const label = field.querySelector('label');
+                    const textInput = field.querySelector('.spec-text-input');
+                    const selectInput = field.querySelector('.spec-select-input');
+                    label.textContent = specConfig.label;
+                    const isSelect = specConfig.options && Array.isArray(specConfig.options);
+                    textInput.classList.toggle('hidden', isSelect);
+                    selectInput.classList.toggle('hidden', !isSelect);
+                    if (isSelect) {
+                        selectInput.innerHTML = '<option value="">選択...</option>' + specConfig.options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+                    } else {
+                        textInput.placeholder = specConfig.placeholder || specConfig.label;
+                    }
+                }
+            });
+        }
+        function updateItemNumbers() {
+            container.querySelectorAll('.input-row:not(.hidden)').forEach((item, index) => {
+                item.querySelector('.item-number').textContent = index + 1;
+            });
+        }
+        function addItem(data = null) {
+            const newItem = template.cloneNode(true);
+            newItem.classList.remove('hidden');
+            newItem.id = '';
+            container.appendChild(newItem);
+            const typeSelect = newItem.querySelector('[name="item_type[]"]');
+            if (data && data.type) typeSelect.value = data.type;
+            updateDynamicFields(typeSelect);
+            if (data) {
+                const getSpecInput = (num) => {
+                    const s = newItem.querySelector(`select[name="item_spec${num}_select"]`);
+                    const t = newItem.querySelector(`input[name="item_spec${num}_text"]`);
+                    return s.classList.contains('hidden') ? t : s;
+                };
+                getSpecInput(1).value = data.spec1 || '';
+                getSpecInput(2).value = data.spec2 || '';
+                getSpecInput(3).value = data.spec3 || '';
+                newItem.querySelector('[name="item_dim_l[]"]').value = data.dimL || '';
+                newItem.querySelector('[name="item_dim_h1[]"]').value = data.dimH1 || '';
+                newItem.querySelector('[name="item_dim_h2[]"]').value = data.dimH2 || '';
+                newItem.querySelector('[name="item_dim_w[]"]').value = data.dimW || '';
+                newItem.querySelector('[name="item_photo_no[]"]').value = data.photoNo || '';
+                newItem.querySelector('[name="item_lat[]"]').value = data.lat || '';
+                newItem.querySelector('[name="item_lon[]"]').value = data.lon || '';
+                newItem.querySelector('[name="item_details[]"]').value = data.details || '';
+            }
+            updateItemNumbers();
+            autoBackup();
+        }
+        function requestDeleteItemConfirmation(btn) { btn.style.display = 'none'; btn.nextElementSibling.style.display = 'inline-flex'; }
+        function cancelRemoveItemConfirmation(btn) { const p = btn.parentElement; p.style.display = 'none'; p.parentElement.querySelector('.delete-button').style.display = 'inline'; }
+        function executeRemoveItem(btn) { btn.closest('.input-row')?.remove(); updateItemNumbers(); saveDraft(); autoBackup(); }
+        function getGpsForItem(btn) {
+            if (!navigator.geolocation) { alert('お使いのブラウザは位置情報取得に対応していません。'); return; }
+            const itemRow = btn.closest('.input-row');
+            const latInput = itemRow.querySelector('[name="item_lat[]"]');
+            const lonInput = itemRow.querySelector('[name="item_lon[]"]');
+            if (latInput.value && lonInput.value) { if (!confirm('既に位置情報が入力されています。新しい情報で上書きしますか？')) return; }
+            const statusEl = itemRow.querySelector('.gps-item-status');
+            statusEl.textContent = '取得中...';
+            navigator.geolocation.getCurrentPosition(position => {
+                latInput.value = position.coords.latitude.toFixed(8);
+                lonInput.value = position.coords.longitude.toFixed(8);
+                statusEl.textContent = '成功';
+                setTimeout(() => { statusEl.textContent = '' }, 3000);
+                saveDraft();
+            }, error => {
+                let msg = '位置情報の取得に失敗。';
+                if (error.code === 1) msg += '利用を許可してください。';
+                if (error.code === 2) msg += '電波の良い場所でお試しください。';
+                if (error.code === 3) msg += 'タイムアウトしました。';
+                alert(msg);
+                statusEl.textContent = '失敗';
+            }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+        }
+        function saveDraft() {
+            const itemsData = Array.from(container.querySelectorAll('.input-row:not(.hidden)')).map(row => {
+                const getSpec = (n) => { const s = row.querySelector(`select[name="item_spec${n}_select"]`), t = row.querySelector(`input[name="item_spec${n}_text"]`); return !s.classList.contains('hidden') ? s.value : t.value; };
+                return { type: row.querySelector('[name="item_type[]"]').value, spec1: getSpec(1), spec2: getSpec(2), spec3: getSpec(3), dimL: row.querySelector('[name="item_dim_l[]"]').value, dimH1: row.querySelector('[name="item_dim_h1[]"]').value, dimH2: row.querySelector('[name="item_dim_h2[]"]').value, dimW: row.querySelector('[name="item_dim_w[]"]').value, photoNo: row.querySelector('[name="item_photo_no[]"]').value, lat: row.querySelector('[name="item_lat[]"]').value, lon: row.querySelector('[name="item_lon[]"]').value, details: row.querySelector('[name="item_details[]"]').value };
+            });
+            const draft = { facilityName: document.getElementById('facilityName').value, inspectionDate: document.getElementById('inspectionDate').value, inspectorName: document.getElementById('inspectorName').value, overallRemarks: document.getElementById('overall_remarks').value, items: itemsData };
+            localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        }
+        function loadDraft() {
+            const draftJSON = localStorage.getItem(DRAFT_KEY);
+            if (!draftJSON) { addItem(); return; }
+            try {
+                const draft = JSON.parse(draftJSON);
+                document.getElementById('facilityName').value = draft.facilityName || '';
+                document.getElementById('inspectionDate').value = draft.inspectionDate || '';
+                document.getElementById('inspectorName').value = draft.inspectorName || '';
+                document.getElementById('overall_remarks').value = draft.overallRemarks || '';
+                container.innerHTML = '';
+                if (draft.items && draft.items.length > 0) {
+                    lastAutoBackupCount = Math.floor(draft.items.length / 10) * 10;
+                    draft.items.forEach(itemData => addItem(itemData));
+                } else { addItem(); }
+            } catch (e) { localStorage.removeItem(DRAFT_KEY); addItem(); }
+        }
+        function resetForm() { if (confirm('本当にフォームをリセットしますか？')) { if (confirm('この操作は取り消せません。保存された下書きもすべて消去されます。本当によろしいですか？')) { localStorage.removeItem(DRAFT_KEY); inspectionForm.reset(); container.innerHTML = ''; addItem(); outputContainer.classList.add('hidden'); alert('フォームをリセットしました。'); } } }
+        function generateTsvData() {
+            let tsvContent = `# 施設名称:\t${document.getElementById('facilityName')?.value||''}\n# 点検年月日:\t${document.getElementById('inspectionDate')?.value||''}\n# 点検者氏名:\t${document.getElementById('inspectorName')?.value||''}\n# 総合所見:\t${(document.getElementById('overall_remarks')?.value||'').replace(/\n/g,'\n# ')}\n#\n`;
+            tsvContent += ["番号", "施設区分/部位", "諸元1", "諸元2", "諸元3", "寸法L", "寸法H1", "寸法H2", "寸法W", "緯度", "経度", "詳細/特記事項", "写真番号"].join("\t") + "\n";
+            container.querySelectorAll('.input-row:not(.hidden)').forEach((itemRow, index) => {
+                const getSpec = n => { const s = itemRow.querySelector(`select[name="item_spec${n}_select"]`), t = itemRow.querySelector(`input[name="item_spec${n}_text"]`); return !s.classList.contains('hidden') ? s.value : t.value; };
+                const rowData = [index + 1, itemRow.querySelector('select[name="item_type[]"]')?.value, getSpec(1), getSpec(2), getSpec(3), itemRow.querySelector('input[name="item_dim_l[]"]')?.value, itemRow.querySelector('input[name="item_dim_h1[]"]')?.value, itemRow.querySelector('input[name="item_dim_h2[]"]')?.value, itemRow.querySelector('input[name="item_dim_w[]"]')?.value, itemRow.querySelector('input[name="item_lat[]"]')?.value, itemRow.querySelector('input[name="item_lon[]"]')?.value, itemRow.querySelector('textarea[name="item_details[]"]')?.value.replace(/[\n\r\t]/g, ' '), itemRow.querySelector('input[name="item_photo_no[]"]')?.value];
+                tsvContent += rowData.map(field => String(field ?? '')).join("\t") + "\n";
+            });
+            return tsvContent;
+        }
+        function downloadData(content, filename) {
+            const blob = new Blob([content], { type: 'text/tab-separated-values;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+        }
+        function autoBackup() {
+            const currentItemCount = container.querySelectorAll('.input-row:not(.hidden)').length;
+            if (currentItemCount > 0 && currentItemCount % 10 === 0) {
+                if (currentItemCount !== lastAutoBackupCount) {
+                    alert(`${currentItemCount}項目に達したため、自動でバックアップを保存します。`);
+                    const tsvContent = generateTsvData();
+                    const facilityName = document.getElementById('facilityName')?.value || '無題';
+                    const safeName = facilityName.replace(/[^a-z0-9_\-.\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/gi, '_');
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const filename = `渓流カルテ_${safeName}_自動バックアップ_${timestamp}.tsv`;
+                    downloadData(tsvContent, filename);
+                    lastAutoBackupCount = currentItemCount;
+                }
+            }
+        }
+        function restoreFromBackup() { document.getElementById('restoreFile').click(); }
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (!confirm('現在の入力内容が破棄されますが、バックアップから復元しますか？')) { event.target.value = ''; return; }
+            const reader = new FileReader();
+            reader.onload = e => {
+                try { parseAndLoadTsv(e.target.result); }
+                catch (err) { alert('ファイルの読み込みに失敗しました。形式が正しいか確認してください。'); console.error(err); }
+                event.target.value = '';
+            };
+            reader.readAsText(file, 'utf-8');
+        }
+        function parseAndLoadTsv(content) {
+            const lines = content.split(/\r?\n/);
+            let headers = [];
+            const parsedItems = [];
+            const basicInfo = {};
+            lines.forEach(line => {
+                if (line.startsWith('#')) {
+                    const parts = line.substring(2).split(':\t');
+                    if (parts.length === 2) {
+                        const key = parts[0].trim(), value = parts[1].trim();
+                        if (key === '施設名称') basicInfo.facilityName = value;
+                        if (key === '点検年月日') basicInfo.inspectionDate = value;
+                        if (key === '点検者氏名') basicInfo.inspectorName = value;
+                        if (key === '総合所見') basicInfo.overallRemarks = value;
+                    }
+                    return;
+                }
+                if (line.trim() === '') return;
+                const values = line.split('\t');
+                if (headers.length === 0) { headers = values.map(h => h.trim()); return; }
+                let item = {};
+                headers.forEach((header, i) => { if (values[i] !== undefined) item[header] = values[i].trim(); });
+                parsedItems.push(item);
+            });
+            localStorage.removeItem(DRAFT_KEY);
+            inspectionForm.reset();
+            container.innerHTML = '';
+            document.getElementById('facilityName').value = basicInfo.facilityName || '';
+            document.getElementById('inspectionDate').value = basicInfo.inspectionDate || '';
+            document.getElementById('inspectorName').value = basicInfo.inspectorName || '';
+            document.getElementById('overall_remarks').value = basicInfo.overallRemarks || '';
+            const colMap = { type: '施設区分/部位', spec1: '諸元1', spec2: '諸元2', spec3: '諸元3', dimL: '寸法L', dimH1: '寸法H1', dimH2: '寸法H2', dimW: '寸法W', lat: '緯度', lon: '経度', details: '詳細/特記事項', photoNo: '写真番号' };
+            parsedItems.forEach(pItem => {
+                const dItem = {};
+                for (const key in colMap) { dItem[key] = pItem[colMap[key]]; }
+                addItem(dItem);
+            });
+            saveDraft();
+            alert('バックアップからデータを復元しました。');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                if (!container || !inspectionForm) throw new Error("Essential elements missing");
+                loadDraft();
+                inspectionForm.addEventListener('input', saveDraft);
+                container.addEventListener('change', event => {
+                    if (event.target?.matches('select[name="item_type[]"]')) {
+                        updateDynamicFields(event.target);
+                    }
+                });
+                copyButton.addEventListener('click', () => {
+                    const content = generateTsvData();
+                    outputDataTextarea.value = content;
+                    outputContainer.classList.remove('hidden');
+                    navigator.clipboard.writeText(content).then(() => alert('コピーしました！'));
+                });
+                downloadButton.addEventListener('click', () => {
+                    const content = generateTsvData();
+                    outputDataTextarea.value = content;
+                    outputContainer.classList.remove('hidden');
+                    const facilityName = document.getElementById('facilityName')?.value || '無題';
+                    const inspectionDate = document.getElementById('inspectionDate')?.value || new Date().toISOString().slice(0, 10);
+                    const safeName = facilityName.replace(/[^a-z0-9_\-.\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/gi, '_');
+                    const filename = `渓流カルテ_${safeName}_${inspectionDate}.tsv`;
+                    downloadData(content, filename);
+                });
+                inspectionForm.addEventListener('submit', e => {
+                    e.preventDefault();
+                    const content = generateTsvData();
+                    outputDataTextarea.value = content;
+                    outputContainer.classList.remove('hidden');
+                    alert("データを生成しました。");
+                });
+            } catch (error) {
+                console.error("Init Error:", error);
+                alert("ページの初期化中にエラーが発生しました。");
+            }
+        });
+    </script>
+</body>
+</html>
